@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>HAMZA'S NEURAL INTERFACE v4.0</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;900&display=swap');
+
+body, html {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #000;
+  font-family: 'Orbitron', monospace;
+  user-select: none; 
+}
+
+/* --- HUD LAYOUT --- */
+.hud { 
+  position:absolute; color:#00f3ff; text-shadow:0 0 8px #00f3ff; 
+  z-index:10; pointer-events:none; font-size:14px; letter-spacing:2px;
+}
+#hud-tl { top:20px; left:20px; text-align:left; border-left: 3px solid #00f3ff; padding-left: 10px; }
+#hud-tr { top:20px; right:20px; text-align:right; border-right: 3px solid #00f3ff; padding-right: 10px; }
+#hud-bl { bottom:20px; left:20px; text-align:left; }
+#hud-br { bottom:20px; right:20px; text-align:right; }
+
+/* --- WATERMARK CSS --- */
+#watermark {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255,255,255,0.35);
+    font-size: 11px; /* Slightly smaller for a cleaner look */
+    letter-spacing: 2px;
+    z-index: 999;
+    text-shadow: 0 0 8px #00f3ff;
+    font-family: 'Orbitron', monospace;
+    pointer-events: none;
+}
+
+/* --- VIDEO & CANVAS LAYERING --- */
+video { 
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    opacity: 0.2; 
+    z-index: 0;
+}
+
+canvas { 
+    position: absolute; top: 0; left: 0;
+    display:block; 
+    transform:scaleX(-1);
+    z-index: 1;
+}
+
+/* --- VIGNETTE OVERLAY --- */
+.overlay {
+  position:absolute; top:0; left:0; width:100%; height:100%;
+  background:
+    linear-gradient(rgba(0,0,0,0) 50%, rgba(0,0,0,0.8) 100%),
+    linear-gradient(90deg, rgba(255,0,0,0.03), rgba(0,255,0,0.01), rgba(0,0,255,0.03));
+  background-size: 100% 2px, 3px 100%;
+  box-shadow: inset 0 0 150px rgba(0,0,0,0.9);
+  pointer-events:none;
+  z-index:5;
+}
+
+/* --- START SCREEN OVERLAY --- */
+#start-overlay {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.95); 
+  z-index: 100; 
+  display: flex; 
+  flex-direction: column;
+  justify-content: center; 
+  align-items: center;
+  cursor: pointer;
+}
+
+.blink { 
+  animation: pulse 1.5s infinite; 
+  color: #00f3ff; 
+  font-size: 24px; 
+  text-shadow: 0 0 10px #00f3ff; 
+  margin-top: 20px;
+}
+
+@keyframes pulse { 
+  0% { opacity: 1; } 
+  50% { opacity: 0.5; } 
+  100% { opacity: 1; } 
+}
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+</head>
+<body>
+
+<video id="input_video"></video>
+<div class="overlay"></div>
+
+<div id="start-overlay">
+  <h1 style="color:white; text-shadow: 0 0 15px white; font-size: 40px; margin: 0;">HAMZA INTERFACE v4.0</h1>
+  <div class="blink">[ CLICK SYSTEM TO INITIALIZE ]</div>
+</div>
+
+<div id="hud-tl" class="hud">SYS.STATUS: ONLINE<br>PARTICLES: <span id="p-count">15000</span></div>
+<div id="hud-tr" class="hud">FPS: <span id="fps">60</span></div>
+<div id="hud-bl" class="hud">L.HAND [CMD]: <span id="l-cmd">WAITING</span><br>MODE: <span id="l-mode">IDLE</span></div>
+<div id="hud-br" class="hud">R.HAND [PHYS]: <span id="r-stat">WAITING</span><br>INTERACTION: <span id="r-inter">NONE</span></div>
+
+<div id="watermark">© 2026 HAMZA BASHARAT | ALL RIGHTS RESERVED</div>
+
+<script>
+const CONFIG = {
+    particleCount: 15000, 
+    particleSize: 3.8,    
+    lerpSpeed: 0.28,      
+    colors: {
+        blue: new THREE.Color(0x00FFFF),   
+        yellow: new THREE.Color(0xFFD700), 
+        pink: new THREE.Color(0xFF0099),   
+        green: new THREE.Color(0x00FF00),  
+        orange: new THREE.Color(0xFF4500), 
+        white: new THREE.Color(0xFFFFFF)
+    }
+};
+
+// --- Scene Setup ---
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,1,3000);
+camera.position.z = 800;
+
+const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// --- Particles Setup ---
+const positions = new Float32Array(CONFIG.particleCount*3);
+const targets = new Float32Array(CONFIG.particleCount*3);
+const initialPos = new Float32Array(CONFIG.particleCount*3);
+const colors = new Float32Array(CONFIG.particleCount*3);
+
+for(let i=0;i<CONFIG.particleCount;i++){
+    const x=(Math.random()-0.5)*2000;
+    const y=(Math.random()-0.5)*1200;
+    const z=(Math.random()-0.5)*1000;
+    positions[i*3]=x; positions[i*3+1]=y; positions[i*3+2]=z;
+    initialPos[i*3]=x; initialPos[i*3+1]=y; initialPos[i*3+2]=z;
+    targets[i*3]=x; targets[i*3+1]=y; targets[i*3+2]=z;
+    colors[i*3]=0; colors[i*3+1]=1; colors[i*3+2]=1;
+}
+
+const geometry = new THREE.BufferGeometry();
+geometry.setAttribute('position', new THREE.BufferAttribute(positions,3));
+geometry.setAttribute('color', new THREE.BufferAttribute(colors,3));
+
+const material = new THREE.PointsMaterial({
+    size: CONFIG.particleSize,
+    vertexColors:true,
+    blending:THREE.AdditiveBlending,
+    transparent:true,
+    opacity: 1.0, 
+    depthTest:false
+});
+
+const particles = new THREE.Points(geometry,material);
+scene.add(particles);
+
+// --- State Variables ---
+let leftHand={present:false,fingers:0,palm:new THREE.Vector3()};
+let rightHand={present:false,fingers:0,tip:new THREE.Vector3(),palm:new THREE.Vector3()};
+let currentTextMode=0, isNebula=false, isCatch=false, isCombo=false;
+
+// --- Text Generator ---
+function generateText(text, color){
+    const canvas=document.createElement('canvas');
+    const ctx=canvas.getContext('2d');
+    canvas.width=1600; canvas.height=800;
+    
+    ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle='#FFF';
+    
+    if(text.length > 10) {
+        ctx.font='900 140px "Orbitron", sans-serif'; 
+    } else {
+        ctx.font='900 220px "Orbitron", sans-serif'; 
+    }
+    
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(text,canvas.width/2,canvas.height/2);
+    
+    const data=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+    const valid=[];
+    
+    for(let y=0;y<canvas.height;y+=4){ 
+        for(let x=0;x<canvas.width;x+=4){
+            if(data[(y*canvas.width+x)*4]>128) {
+                valid.push({
+                    x: -(x-canvas.width/2)*1.6, 
+                    y: -(y-canvas.height/2)*1.6, 
+                    z: 0
+                });
+            }
+        }
+    }
+    
+    for(let i=0;i<CONFIG.particleCount;i++){
+        if(i<valid.length){
+            targets[i*3]=valid[i].x; targets[i*3+1]=valid[i].y; targets[i*3+2]=0;
+        } else {
+            targets[i*3]=(Math.random()-0.5)*2500;
+            targets[i*3+1]=(Math.random()-0.5)*1500;
+            targets[i*3+2]=(Math.random()-0.5)*1000;
+        }
+    }
+    setParticleColor(color);
+}
+
+function generateSphere(center){
+    const phi=Math.PI*(3-Math.sqrt(5));
+    const r=250;
+    for(let i=0;i<CONFIG.particleCount;i++){
+        const y=1-(i/(CONFIG.particleCount-1))*2;
+        const radius=Math.sqrt(1-y*y);
+        const theta=phi*i;
+        targets[i*3]=center.x+Math.cos(theta)*radius*r;
+        targets[i*3+1]=center.y+y*r;
+        targets[i*3+2]=center.z+Math.sin(theta)*radius*r;
+    }
+}
+
+function setParticleColor(c){
+    const attr=particles.geometry.attributes.color;
+    for(let i=0;i<CONFIG.particleCount;i++){
+        attr.setXYZ(i,c.r,c.g,c.b);
+    }
+    attr.needsUpdate=true;
+}
+
+// --- Animation Loop ---
+const clock=new THREE.Clock();
+function animate(){
+    requestAnimationFrame(animate);
+    const dt=clock.getDelta(); const time=clock.elapsedTime;
+    const fpsElem = document.getElementById('fps');
+    if(fpsElem) fpsElem.innerText=Math.round(1/dt);
+
+    if(leftHand.present && leftHand.fingers===5 && rightHand.present && rightHand.fingers===5){
+        isCombo=true; isCatch=true; isNebula=true;
+        generateSphere(leftHand.palm);
+        setParticleColor(CONFIG.colors.orange);
+        document.getElementById('l-mode').innerText='ULTIMATE COMBO';
+    } else {
+        isCombo=false;
+        
+        if(leftHand.present){
+            const f=leftHand.fingers;
+            let text=''; let col=CONFIG.colors.white;
+            
+            if(f===1){text='AoA'; col=CONFIG.colors.blue;}
+            else if(f===2){text='I AM HAMZA'; col=CONFIG.colors.yellow;}
+            else if(f===3){text='DREAM BIG'; col=CONFIG.colors.pink;}
+            else if(f===4){text='GOODBYE'; col=CONFIG.colors.green;}
+            
+            if(f>0 && f<5 && currentTextMode!==f){
+                currentTextMode=f; isCatch=false; isNebula=false;
+                generateText(text,col);
+                document.getElementById('l-cmd').innerText=text;
+            } else if(f===5){
+                currentTextMode=5; isCatch=true;
+                document.getElementById('l-mode').innerText='CATCH READY';
+            }
+        }
+        
+        if(rightHand.present){
+            if(rightHand.fingers===5 && !isNebula){
+                isNebula=true;
+                for(let i=0;i<CONFIG.particleCount*3;i++) targets[i]=initialPos[i];
+                document.getElementById('r-inter').innerText='NEBULA RIPPLE';
+            } else if(rightHand.fingers<5){
+                isNebula=false;
+                document.getElementById('r-inter').innerText='PLANAR REPULSE';
+            }
+        }
+    }
+
+    const pos=particles.geometry.attributes.position.array;
+    for(let i=0;i<CONFIG.particleCount;i++){
+        const ix=i*3, iy=i*3+1, iz=i*3+2;
+        let tx=targets[ix], ty=targets[iy], tz=targets[iz];
+        
+        if(isCombo) ty+=Math.sin(time*10+i*0.1)*20;
+        
+        pos[ix]+=(tx-pos[ix])*CONFIG.lerpSpeed;
+        pos[iy]+=(ty-pos[iy])*CONFIG.lerpSpeed;
+        pos[iz]+=(tz-pos[iz])*CONFIG.lerpSpeed;
+
+        if(rightHand.present){
+            const dx=pos[ix]-rightHand.tip.x;
+            const dy=pos[iy]-rightHand.tip.y;
+            
+            if(isNebula){
+                const dist=Math.sqrt(dx*dx+dy*dy);
+                if(dist<300) pos[iz]+=Math.sin(dist*0.1-time*5)*20;
+            } else {
+                const distSq=dx*dx+dy*dy; const radius=150*150;
+                if(distSq<radius){
+                    const f=(1-distSq/radius)*100;
+                    const angle=Math.atan2(dy,dx);
+                    pos[ix]+=Math.cos(angle)*f; pos[iy]+=Math.sin(angle)*f;
+                }
+            }
+        }
+    }
+    particles.geometry.attributes.position.needsUpdate=true;
+    renderer.render(scene,camera);
+}
+animate();
+
+window.addEventListener('resize',()=>{
+    camera.aspect=window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth,window.innerHeight);
+});
+
+// --- MediaPipe Settings ---
+const video=document.getElementById('input_video');
+const hands=new Hands({locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+
+hands.setOptions({
+    maxNumHands:2,
+    modelComplexity:1,
+    minDetectionConfidence:0.5, 
+    minTrackingConfidence:0.5 
+});
+
+hands.onResults(results=>{
+    leftHand.present=false; rightHand.present=false;
+    if(results.multiHandLandmarks){
+        for(let i=0;i<results.multiHandLandmarks.length;i++){
+            const lm=results.multiHandLandmarks[i];
+            const label=results.multiHandedness[i].label;
+            const px=(lm[9].x-0.5)*1600; const py=-(lm[9].y-0.5)*1000;
+            const f=countFingers(lm);
+            
+            if(label==='Right'){
+                leftHand.present=true; leftHand.fingers=f; leftHand.palm.set(px,py,0);
+            } else {
+                rightHand.present=true; rightHand.fingers=f; rightHand.palm.set(px,py,0); 
+                rightHand.tip.set((lm[8].x-0.5)*1600,-(lm[8].y-0.5)*1000,0);
+            }
+        }
+    }
+});
+
+const cam=new Camera(video,{
+    onFrame:async()=>{await hands.send({image:video});},
+    width:1280,
+    height:720
+});
+
+function countFingers(lm){
+    let c=0;
+    if(Math.abs(lm[4].x-lm[9].x)>0.05)c++;
+    if(lm[8].y<lm[6].y)c++;
+    if(lm[12].y<lm[10].y)c++;
+    if(lm[16].y<lm[14].y)c++;
+    if(lm[20].y<lm[18].y)c++;
+    return c;
+}
+
+// --- CLICK TO START LOGIC ---
+const overlay = document.getElementById('start-overlay');
+overlay.addEventListener('click', () => {
+    overlay.style.display = 'none';
+    cam.start();
+});
+</script>
+
+</body>
+</html>

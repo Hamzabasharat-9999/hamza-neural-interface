@@ -1,0 +1,72 @@
+
+# ==========================================
+#   Neural-Sync-AR - GUIDE
+# ==========================================
+
+Welcome to your AR Neural Interface project. This document explains how the system works, 
+how to customize it, and how to deploy it to the web.
+
+---
+
+### 1. HOW TO USE THE INTERFACE
+Once the system is running and you have clicked "INITIALIZE":
+
+* LEFT HAND (The Command Hand):
+    - 1 Finger Raised: Displays "AoA" (Blue)
+    - 2 Fingers Raised: Displays "I AM HAMZA" (Yellow)
+    - 3 Fingers Raised: Displays "DREAM BIG" (Pink)
+    - 4 Fingers Raised: Displays "GOODBYE" (Green)
+    - 5 Fingers (Open Palm): "CATCH READY" - Particles will wait for a command.
+
+* RIGHT HAND (The Physical Hand):
+    - Pointing/Moving: The particles will react to your index finger tip (Planar Repulse).
+    - 5 Fingers (Open Palm): "NEBULA RIPPLE" - Creates a 3D wave effect through the particle field.
+
+* THE ULTIMATE COMBO:
+    - Raise both hands (5 fingers each) simultaneously to trigger the "Ultimate Combo" sphere.
+
+---
+
+### 2. HOW TO CHANGE THE NAME & TITLES
+To rename the project from "HAMZA INTERFACE" to your new name:
+
+1. Open the .html file in a text editor (like Notepad, VS Code, or Sublime).
+2. Change the Browser Title:
+   Look for: <title>HAMZA'S NEURAL INTERFACE v4.0</title>
+   Change "HAMZA'S" to "YOURNAME'S".
+3. Change the Start Screen:
+   Look for: <h1>HAMZA INTERFACE v4.0</h1>
+   Change it to your preferred project name.
+4. Change the Gesture Text:
+   Inside the <script>, look for: if(f===2){text='I AM HAMZA'; ...}
+   Change 'I AM HAMZA' to any message you want to appear when you show 2 fingers.
+
+---
+
+### 3. CUSTOMIZING THE LOOK (CONFIG)
+At the start of the <script> section, find the 'CONFIG' object:
+
+* particleCount: 15000 (Increase for more detail, decrease if your PC lags).
+* particleSize: 3.8 (Change this to make the "dots" bigger or smaller).
+* lerpSpeed: 0.28 (Lower numbers make particles move slower/smoother).
+* colors: Change the hex codes (e.g., 0x00FFFF) to change the HUD colors.
+
+---
+
+### 4. GITHUB UPLOAD (GITHUB PAGES)
+To host this online for free:
+
+1. Rename your main file to 'index.html'.
+2. Go to GitHub.com and create a new repository (e.g., "neural-interface").
+3. Upload 'index.html' and this 'README.txt'.
+4. Go to Settings > Pages.
+5. Set 'Branch' to 'Main' and click 'Save'.
+6. GitHub will give you a link (e.g., https://username.github.io/neural-interface).
+
+---
+
+### 5. TROUBLESHOOTING
+* BLANK SCREEN: This is usually because you are opening the file directly from your folder. 
+    Browsers block cameras on 'file://' links. Use a local server (VS Code Live Server) 
+    or upload it to GitHub to see it work.
+* LAG: Reduce the 'particleCount' in the CONFIG section.
